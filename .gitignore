@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Generated exports
+out/*.stl
+out/*.csv
+
+# Local FreeCAD source files can be large.
+in/*.FCStd
+in/*.FCStd1
+
+# Temporary viewer/cache files
+*.tmp
