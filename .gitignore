@@ -3,12 +3,13 @@ __pycache__/
 *.py[cod]
 
 # Generated exports
-out/*.stl
-out/*.csv
+out/*
+!out/.gitkeep
 
 # Local FreeCAD source files can be large.
 in/*.FCStd
 in/*.FCStd1
+in/*.FCBak
 
 # Temporary viewer/cache files
 *.tmp

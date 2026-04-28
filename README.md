@@ -1,112 +1,84 @@
-# FreeCAD GPU STL Export
+# FreeCAD STL Export
 
-Fensterfreier STL-Export fuer FreeCAD-Revolutionsprofile:
+Ein Schritt: FreeCAD-Datei aus `in/` als feines STL nach `out/` exportieren.
 
-1. Profilkurve aus der `.FCStd` lesen
-2. Profilpunkte dichter samplen
-3. Profil per GPU/CPU rotieren
-4. binaeres STL schreiben
+```bash
+python3 export_stl.py
+```
 
-Der Export nutzt die Sketch-/BREP-Geometrie direkt und nicht FreeCADs fertigen Mesher.
-
-## Verzeichnislayout
+Default:
 
 ```text
-in/      lokale FreeCAD-Dateien (*.FCStd), nicht in Git
-out/     generierte CSV/STL-Dateien, nicht in Git
-*.py     Exportskripte
+Eingabe:  die einzige *.FCStd in in/
+Ausgabe:  out/<freecad-dateiname>.stl
+Preset:   fine
+Backend:  GPU/ROCm aus .venv/
 ```
 
-`in/` und `out/` sind bewusst als lokale Arbeitsordner gedacht. Grosse Dateien bleiben aus dem Git-Repo raus.
+Die lokale venv liegt hier:
 
-## Schnellstart
+```text
+.venv/
+```
 
-Profilpunkte aus der gespeicherten FreeCAD-BREP-Kurve erzeugen:
+Das Skript startet sich automatisch in diese venv neu und setzt die noetigen ROCm-Pfade. Fuer die Bedienung ist kein Aktivieren und kein extra Wrapper noetig.
+
+## CPU
+
+CPU statt GPU:
 
 ```bash
-python3 export_profile_brep_csv.py \
-  in/BisFree_revolution_test123.FCStd \
-  out/profile_smooth.csv \
-  --samples-per-spline 384
+python3 export_stl.py --cpu
 ```
 
-STL mit CPU-Fallback schreiben:
+## Mehrere FreeCAD-Dateien
+
+Wenn mehr als eine `.FCStd` in `in/` liegt:
 
 ```bash
-python3 gpu_revolve_to_stl.py \
-  out/profile_smooth.csv \
-  out/revolution_gpu_smooth.stl \
-  --segments 4096 \
-  --cpu
+python3 export_stl.py in/mein_modell.FCStd
 ```
 
-STL mit deiner Custom-ROCm-PyTorch-Umgebung schreiben:
+## Ausgabe
+
+Anderer STL-Pfad:
 
 ```bash
-/media/christoph/some_space/Compute/ML-Lab/examples/rocm711_torch_example/.venv/bin/python-rocm \
-  gpu_revolve_to_stl.py \
-  out/profile_smooth.csv \
-  out/revolution_gpu_rocm_smooth.stl \
-  --segments 4096
+python3 export_stl.py --output out/mein_export.stl
 ```
-
-Bei ROCm meldet PyTorch trotzdem `device: cuda`; das ist der HIP-Backend-Pfad.
 
 ## Qualitaet
 
-Zwei Werte bestimmen die sichtbare Rundung:
+```bash
+python3 export_stl.py --preset draft     # schnell
+python3 export_stl.py --preset standard  # mittel
+python3 export_stl.py --preset fine      # default
+```
 
-| Stellschraube | Wirkung |
-| --- | --- |
-| `--samples-per-spline` | glattere Profilkurve, mehr Punkte entlang der FreeCAD-Kurve |
-| `--segments` | glattere Rotation um die Achse, mehr Umfangssegmente |
+| Preset | Profil-Samples | Rotationssegmente |
+| --- | ---: | ---: |
+| `draft` | 96 | 512 |
+| `standard` | 384 | 4096 |
+| `fine` | 768 | 8192 |
 
-Das alte `out/profile.csv` hatte nur 29 Profilzeilen. Das ist fuer glatte Profilrundungen zu grob. Mit `--samples-per-spline 384` entstehen hier 577 Profilzeilen.
-
-Pragmatische Werte:
+Direkt ueberschreiben:
 
 ```bash
-# schnelle Vorschau
-python3 gpu_revolve_to_stl.py out/profile_smooth.csv out/preview.stl --segments 512 --cpu
-
-# guter Export
-python3 gpu_revolve_to_stl.py out/profile_smooth.csv out/final.stl --segments 4096 --cpu
-
-# sehr feine Umfangsrundung, grosse Datei
-python3 gpu_revolve_to_stl.py out/profile_smooth.csv out/final_fine.stl --segments 8192 --cpu
+python3 export_stl.py --samples 768 --segments 8192
 ```
 
-## Flags
-
-### `export_profile_brep_csv.py`
+## Weitere Flags
 
 ```text
-fcstd                    Eingabe: FreeCAD-Datei
-output_csv               Ausgabe: Profilpunkte als CSV
---shape NAME             Shape im FCStd-Archiv, ohne .Shape.brp
---samples-per-spline N   Anzahl Samples pro B-Spline-Profilkurve
+--flip              Dreiecksorientierung umdrehen
+--shape NAME        Shape im FCStd-Archiv
+--open-profile      Profil nicht automatisch schliessen
 ```
 
-Default-Shape:
+Wenn die Oberflaeche innen statt aussen orientiert ist:
 
-```text
-RingFrisbeeProfile_FeatureBand
+```bash
+python3 export_stl.py --flip
 ```
 
-### `gpu_revolve_to_stl.py`
-
-```text
-profile_csv              Eingabe: Profilpunkte
-output_stl               Ausgabe: binaeres STL
---segments N             Umfangssegmente der Rotation, Default: 2048
---cpu                    Torch-CPU erzwingen; ohne Torch: NumPy-Fallback
---flip                   Dreiecksorientierung umdrehen, falls innen/aussen vertauscht ist
---open-profile           Profil nicht automatisch schliessen
-```
-
-## Hinweise
-
-- Wenn die Oberflaeche innen statt aussen orientiert ist, denselben Export mit `--flip` wiederholen.
-- `--segments` glattert nur die Rotation. Fuer glatte Profilradien muss das CSV-Profil selbst dicht genug sein.
-- Ohne installierten PyTorch nutzt `gpu_revolve_to_stl.py` automatisch NumPy auf der CPU.
-- Ausgabeverzeichnisse werden bei Bedarf automatisch angelegt.
+Hinweis: PyTorch meldet bei ROCm intern `device: cuda`; das ist normal und meint den HIP-Backend-Pfad.
