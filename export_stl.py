@@ -8,8 +8,9 @@ import numpy as np
 
 DEFAULT_INPUT_DIR = "in"
 DEFAULT_OUTPUT_DIR = "out"
-DEFAULT_SHAPE = "RingFrisbeeProfile_FeatureBand"
+DEFAULT_SHAPE = None
 DEFAULT_ROCM_PREFIX = "/opt/rocm"
+DEFAULT_ROCM_PATH_FILE = ".rocm_path.local"
 REEXEC_ENV = "FREECAD_STL_EXPORT_ROCM_REEXEC"
 PRESETS = {
     "draft": {"samples": 96, "segments": 512},
@@ -24,6 +25,25 @@ def project_root():
 
 def project_venv_python():
     return os.path.join(project_root(), ".venv", "bin", "python")
+
+
+def resolve_rocm_path():
+    env_path = os.environ.get("ROCM_PATH")
+    if env_path:
+        return env_path
+
+    env_path = os.environ.get("FREECAD_ROCM_PATH")
+    if env_path:
+        return env_path
+
+    path_file = os.path.join(project_root(), DEFAULT_ROCM_PATH_FILE)
+    if os.path.isfile(path_file):
+        with open(path_file, "r", encoding="utf-8") as f:
+            value = f.read().strip()
+        if value:
+            return value
+
+    return DEFAULT_ROCM_PREFIX
 
 
 def prepend_env_path(env, key, values):
@@ -54,7 +74,7 @@ def maybe_reexec_into_project_venv():
 
     prepend_env_path(env, "PATH", [os.path.join(env["VIRTUAL_ENV"], "bin")])
 
-    rocm = os.environ.get("ROCM_PATH", DEFAULT_ROCM_PREFIX)
+    rocm = resolve_rocm_path()
     if os.path.isdir(rocm):
         env.setdefault("ROCM_PATH", rocm)
         env.setdefault("HIP_PATH", rocm)
@@ -122,6 +142,31 @@ def find_default_fcstd(input_dir=DEFAULT_INPUT_DIR):
 def default_output_path(fcstd):
     stem = os.path.splitext(os.path.basename(fcstd))[0]
     return os.path.join(DEFAULT_OUTPUT_DIR, f"{stem}.stl")
+
+
+def list_fcstd_shapes(fcstd_path):
+    with zipfile.ZipFile(fcstd_path) as zf:
+        return sorted(
+            name[:-10]
+            for name in zf.namelist()
+            if name.endswith(".Shape.brp")
+        )
+
+
+def resolve_shape_name(fcstd_path, requested_shape):
+    if requested_shape:
+        return requested_shape
+    shapes = list_fcstd_shapes(fcstd_path)
+    if not shapes:
+        raise ValueError(f"No .Shape.brp entries found in {fcstd_path}")
+    if len(shapes) == 1:
+        return shapes[0]
+    joined = "\n  ".join(shapes)
+    raise ValueError(
+        "Multiple shapes found in FCStd. "
+        "Please pass one explicitly via --shape NAME:\n  "
+        f"{joined}"
+    )
 
 
 def read_shape_brep(fcstd_path, shape_name):
@@ -416,7 +461,11 @@ def main():
     )
     parser.add_argument("fcstd", nargs="?", help="Default: the only .FCStd file in in/")
     parser.add_argument("--output", help="Output STL. Default: out/<input-name>.stl")
-    parser.add_argument("--shape", default=DEFAULT_SHAPE, help="Shape member inside the FCStd archive")
+    parser.add_argument(
+        "--shape",
+        default=DEFAULT_SHAPE,
+        help="Shape member inside the FCStd archive (auto if exactly one shape exists)",
+    )
     parser.add_argument("--preset", choices=PRESETS, default="fine")
     parser.add_argument("--samples", type=int, help="Override preset profile samples")
     parser.add_argument("--segments", type=int, help="Override preset rotational segments")
@@ -436,7 +485,10 @@ def main():
     print(f"output:  {output}")
     print(f"preset:  {args.preset} ({samples} samples, {segments} segments)")
 
-    loops = load_profile_loops(fcstd, args.shape, samples)
+    shape = resolve_shape_name(fcstd, args.shape)
+    print(f"shape:   {shape}")
+
+    loops = load_profile_loops(fcstd, shape, samples)
     print(f"profile points: {sum(len(loop) for loop in loops)}")
 
     triangles = build_triangles(

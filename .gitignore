@@ -1,4 +1,5 @@
 .venv/
+.rocm_path.local
 __pycache__/
 *.py[cod]
 
