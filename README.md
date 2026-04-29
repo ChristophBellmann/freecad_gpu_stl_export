@@ -1,84 +1,78 @@
 # FreeCAD STL Export
 
-Ein Schritt: FreeCAD-Datei aus `in/` als feines STL nach `out/` exportieren.
+Export a FreeCAD `.FCStd` profile from `in/` to a binary STL in `out/` using a single command.
 
 ```bash
 python3 export_stl.py
 ```
 
-Default:
+## Default Behavior
 
 ```text
-Eingabe:  die einzige *.FCStd in in/
-Ausgabe:  out/<freecad-dateiname>.stl
+Input:    the only *.FCStd file in in/
+Output:   out/<input-file-name>.stl
 Preset:   fine
-Backend:  GPU/ROCm aus .venv/
+Backend:  GPU (CUDA/NVIDIA or ROCm) from .venv/
 ```
 
-Die lokale venv liegt hier:
+The script automatically re-executes itself inside the local virtual environment at `.venv/`.
+On ROCm systems, additional ROCm paths are injected automatically when available.
+On NVIDIA/CUDA systems, no ROCm-specific setup is required.
 
-```text
-.venv/
-```
+## CPU Mode
 
-Das Skript startet sich automatisch in diese venv neu und setzt die noetigen ROCm-Pfade. Fuer die Bedienung ist kein Aktivieren und kein extra Wrapper noetig.
-
-## CPU
-
-CPU statt GPU:
+Use CPU instead of GPU:
 
 ```bash
 python3 export_stl.py --cpu
 ```
 
-## Mehrere FreeCAD-Dateien
+## Multiple FreeCAD Files
 
-Wenn mehr als eine `.FCStd` in `in/` liegt:
-
-```bash
-python3 export_stl.py in/mein_modell.FCStd
-```
-
-## Ausgabe
-
-Anderer STL-Pfad:
+If `in/` contains more than one `.FCStd` file, pass the input explicitly:
 
 ```bash
-python3 export_stl.py --output out/mein_export.stl
+python3 export_stl.py in/my_model.FCStd
 ```
 
-## Qualitaet
+## Custom Output Path
 
 ```bash
-python3 export_stl.py --preset draft     # schnell
-python3 export_stl.py --preset standard  # mittel
-python3 export_stl.py --preset fine      # default
+python3 export_stl.py --output out/my_export.stl
 ```
 
-| Preset | Profil-Samples | Rotationssegmente |
+## Quality Presets
+
+```bash
+python3 export_stl.py --preset draft
+python3 export_stl.py --preset standard
+python3 export_stl.py --preset fine
+```
+
+| Preset | Profile Samples | Rotation Segments |
 | --- | ---: | ---: |
 | `draft` | 96 | 512 |
 | `standard` | 384 | 4096 |
 | `fine` | 768 | 8192 |
 
-Direkt ueberschreiben:
+Override preset values directly:
 
 ```bash
 python3 export_stl.py --samples 768 --segments 8192
 ```
 
-## Weitere Flags
+## Additional Flags
 
 ```text
---flip              Dreiecksorientierung umdrehen
---shape NAME        Shape im FCStd-Archiv
---open-profile      Profil nicht automatisch schliessen
+--flip              Reverse triangle orientation
+--shape NAME        Shape member inside the FCStd archive
+--open-profile      Do not auto-close profile loops
 ```
 
-Wenn die Oberflaeche innen statt aussen orientiert ist:
+If face orientation is inverted (inside-out), use:
 
 ```bash
 python3 export_stl.py --flip
 ```
 
-Hinweis: PyTorch meldet bei ROCm intern `device: cuda`; das ist normal und meint den HIP-Backend-Pfad.
+Note: On ROCm, PyTorch may still report `device: cuda`. This is expected and maps to the HIP backend.

@@ -48,42 +48,44 @@ def maybe_reexec_into_project_venv():
     if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
         return
 
-    rocm = os.environ.get("ROCM_PATH", DEFAULT_ROCM_PREFIX)
     env = dict(os.environ)
     env[REEXEC_ENV] = "1"
     env["VIRTUAL_ENV"] = os.path.join(project_root(), ".venv")
-    env["ROCM_PATH"] = rocm
-    env["HIP_PATH"] = env.get("HIP_PATH", rocm)
-    env["HSA_PATH"] = env.get("HSA_PATH", rocm)
-    env["USE_ROCM_HIPBLASLT"] = env.get("USE_ROCM_HIPBLASLT", "0")
 
-    prepend_env_path(env, "PATH", [
-        os.path.join(rocm, "bin"),
-        os.path.join(rocm, "llvm", "bin"),
-        os.path.join(env["VIRTUAL_ENV"], "bin"),
-    ])
-    prepend_env_path(env, "LD_LIBRARY_PATH", [
-        os.path.join(rocm, "lib"),
-        os.path.join(rocm, "lib64"),
-        os.path.join(rocm, "lib", "llvm", "lib"),
-        os.path.join(rocm, "lib", "host-math", "lib"),
-        os.path.join(rocm, "lib", "rocm_sysdeps", "lib"),
-        os.path.join(rocm, "llvm", "lib"),
-    ])
+    prepend_env_path(env, "PATH", [os.path.join(env["VIRTUAL_ENV"], "bin")])
 
-    libomp = os.path.join(rocm, "lib", "llvm", "lib", "libomp.so")
-    if os.path.exists(libomp):
-        prepend_env_path(env, "LD_PRELOAD", [libomp])
+    rocm = os.environ.get("ROCM_PATH", DEFAULT_ROCM_PREFIX)
+    if os.path.isdir(rocm):
+        env.setdefault("ROCM_PATH", rocm)
+        env.setdefault("HIP_PATH", rocm)
+        env.setdefault("HSA_PATH", rocm)
+        env.setdefault("USE_ROCM_HIPBLASLT", "0")
+        prepend_env_path(env, "PATH", [
+            os.path.join(rocm, "bin"),
+            os.path.join(rocm, "llvm", "bin"),
+        ])
+        prepend_env_path(env, "LD_LIBRARY_PATH", [
+            os.path.join(rocm, "lib"),
+            os.path.join(rocm, "lib64"),
+            os.path.join(rocm, "lib", "llvm", "lib"),
+            os.path.join(rocm, "lib", "host-math", "lib"),
+            os.path.join(rocm, "lib", "rocm_sysdeps", "lib"),
+            os.path.join(rocm, "llvm", "lib"),
+        ])
 
-    if "HIP_DEVICE_LIB_PATH" not in env:
-        bitcode_paths = [
-            os.path.join(rocm, "lib", "llvm", "amdgcn", "bitcode"),
-            os.path.join(rocm, "amdgcn", "bitcode"),
-        ]
-        for path in bitcode_paths:
-            if os.path.isdir(path):
-                env["HIP_DEVICE_LIB_PATH"] = path
-                break
+        libomp = os.path.join(rocm, "lib", "llvm", "lib", "libomp.so")
+        if os.path.exists(libomp):
+            prepend_env_path(env, "LD_PRELOAD", [libomp])
+
+        if "HIP_DEVICE_LIB_PATH" not in env:
+            bitcode_paths = [
+                os.path.join(rocm, "lib", "llvm", "amdgcn", "bitcode"),
+                os.path.join(rocm, "amdgcn", "bitcode"),
+            ]
+            for path in bitcode_paths:
+                if os.path.isdir(path):
+                    env["HIP_DEVICE_LIB_PATH"] = path
+                    break
 
     os.execvpe(venv_python, [venv_python, __file__, *sys.argv[1:]], env)
 
@@ -329,7 +331,7 @@ def select_device(mode):
 
     if torch is None:
         raise RuntimeError(
-            "GPU mode needs the local .venv with PyTorch/ROCm. "
+            "GPU mode needs the local .venv with PyTorch (CUDA or ROCm). "
             f"Torch import failed: {TORCH_IMPORT_ERROR!r}"
         )
     if not torch.cuda.is_available():
